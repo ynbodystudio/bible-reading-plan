@@ -3,18 +3,27 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f7f3ec">
+  <meta name="theme-color" content="#ffffff">
   <title>나만의 성경통독표</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <div class="app">
-    <header class="topbar">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <svg class="logo" viewBox="0 0 28 28" aria-hidden="true">
+        <path d="M14 7.5C11.6 5.8 8.3 5 4.5 5.2v15.6c3.8-.2 7.1.6 9.5 2.3 2.4-1.7 5.7-2.5 9.5-2.3V5.2C19.7 5 16.4 5.8 14 7.5z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
+        <path d="M14 7.5v15.6" stroke="currentColor" stroke-width="2.2"/>
+      </svg>
       <h1>나만의 성경통독표</h1>
-    </header>
+    </div>
+  </header>
 
+  <div class="app">
     <!-- 계획 만들기 화면 -->
     <main id="view-setup" class="view" hidden>
+      <h2 class="page-title">통독 계획 만들기</h2>
+      <p class="page-sub">나에게 맞는 속도로, 끝까지 읽을 수 있게.</p>
+
       <section class="card">
         <h2>무엇을 읽을까요?</h2>
         <div class="seg" data-name="scope">
@@ -81,7 +90,7 @@
         <p class="hint">빼둔 요일은 쉬는 날이에요. 밀린 분량을 따라잡는 날로 쓰세요.</p>
       </section>
 
-      <section class="card preview" id="preview" aria-live="polite"></section>
+      <section class="float-card" id="preview" aria-live="polite"></section>
 
       <div class="actions">
         <button type="button" class="btn primary" id="btn-create">이 계획으로 통독표 만들기</button>
@@ -91,10 +100,12 @@
 
     <!-- 전체표 화면 -->
     <main id="view-table" class="view" hidden>
-      <section class="card summary" id="summary"></section>
+      <h2 class="page-title" id="summary-title"></h2>
+      <p class="page-sub" id="summary-period"></p>
+      <section class="float-card" id="summary"></section>
       <div class="table" id="plan-table"></div>
       <div class="actions">
-        <button type="button" class="btn ghost" id="btn-edit">계획 수정하기</button>
+        <button type="button" class="btn secondary" id="btn-edit">계획 수정하기</button>
       </div>
     </main>
   </div>

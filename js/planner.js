@@ -236,9 +236,9 @@ var PLANNER = (function () {
     result.minutesPerDay = totalVerses / readingDays / speed;
     result.days = days;
     if (result.minutesPerDay > MAX_MINUTES_WARNING * 3) {
-      result.warning = '하루 평균 ' + Math.round(result.minutesPerDay) + '분이에요. 현실적으로 어려운 계획이에요.';
+      result.warning = '하루 3시간이 넘어요. 현실적으로 어려운 계획이에요.';
     } else if (result.minutesPerDay > MAX_MINUTES_WARNING) {
-      result.warning = '하루 평균 ' + Math.round(result.minutesPerDay) + '분이에요. 조금 빡빡할 수 있어요.';
+      result.warning = '하루 1시간이 넘어요. 조금 빡빡할 수 있어요.';
     }
     return result;
 

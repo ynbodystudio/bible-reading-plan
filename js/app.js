@@ -178,23 +178,35 @@
       box.innerHTML = '<div class="notice error">' + escapeHtml(r.error) + '</div>';
       return;
     }
-    var auto = '<span class="auto">자동 계산</span>';
-    var restDays = r.calendarDays - r.readingDays;
+    var auto = '<span class="badge">자동 계산</span>';
     var html =
-      '<h2>미리보기</h2>' +
+      '<p class="eyebrow">미리보기 · 하루 평균' + (settings.mode !== 'daily' ? auto : '') + '</p>' +
+      heroStat(r) +
       '<dl class="stats">' +
-        '<dt>기간</dt><dd>' + r.calendarDays + '일' +
-          (restDays ? ' <small>(읽는 날 ' + r.readingDays + '일)</small>' : '') +
-          (settings.mode !== 'period' ? auto : '') + '</dd>' +
+        '<dt>기간</dt><dd>' + periodText(r) + (settings.mode !== 'period' ? auto : '') + '</dd>' +
         '<dt>마감일</dt><dd>' + prettyDate(r.endDate) + (settings.mode !== 'deadline' ? auto : '') + '</dd>' +
-        '<dt>하루</dt><dd>약 ' + r.chaptersPerDay.toFixed(1) + '장 · ' + prettyMinutes(r.minutesPerDay) +
-          (settings.mode !== 'daily' ? auto : '') + '</dd>' +
       '</dl>';
     if (settings.mode === 'daily' && r.readingDays === r.totalChapters) {
-      html += '<div class="notice warn">하루 최소 1장씩은 읽도록 계획했어요.</div>';
+      html += '<div class="notice">하루 최소 1장씩은 읽도록 계획했어요.</div>';
     }
-    if (r.warning) html += '<div class="notice warn">' + escapeHtml(r.warning) + '</div>';
+    if (r.warning) html += '<div class="notice">' + escapeHtml(r.warning) + '</div>';
     box.innerHTML = html;
+  }
+
+  // "13분"처럼 하루 평균 시간을 크게 보여주는 부분
+  function heroStat(r) {
+    var m = Math.round(r.minutesPerDay);
+    var num, unit;
+    if (m < 60) { num = m; unit = '분'; }
+    else { num = prettyMinutes(m); unit = ''; }
+    return '<div class="hero-stat"><span class="hero-num' + (m < 60 ? '' : ' small') + '">' + num + '</span>' +
+      (unit ? '<span class="hero-unit">' + unit + '</span>' : '') + '</div>' +
+      '<p class="hero-caption">약 ' + r.chaptersPerDay.toFixed(1) + '장씩 읽어요</p>';
+  }
+
+  function periodText(r) {
+    var restDays = r.calendarDays - r.readingDays;
+    return r.calendarDays + '일' + (restDays ? ' <small>(읽는 날 ' + r.readingDays + '일)</small>' : '');
   }
 
   // ---------- 전체표 화면 ----------
@@ -208,13 +220,14 @@
       return;
     }
 
-    var restDays = r.calendarDays - r.readingDays;
+    $('summary-title').textContent = PLANNER.SCOPE_NAMES[r.scope] + ' 통독표';
+    $('summary-period').textContent = prettyDate(r.startDate) + ' ~ ' + prettyDate(r.endDate);
     $('summary').innerHTML =
-      '<h2>' + PLANNER.SCOPE_NAMES[r.scope] + ' 통독</h2>' +
-      '<p class="period">' + prettyDate(r.startDate) + ' ~ ' + prettyDate(r.endDate) + '</p>' +
+      '<p class="eyebrow">하루 평균</p>' +
+      heroStat(r) +
       '<dl class="stats">' +
-        '<dt>기간</dt><dd>' + r.calendarDays + '일' + (restDays ? ' <small>(읽는 날 ' + r.readingDays + '일)</small>' : '') + '</dd>' +
-        '<dt>하루</dt><dd>약 ' + r.chaptersPerDay.toFixed(1) + '장 · ' + prettyMinutes(r.minutesPerDay) + '</dd>' +
+        '<dt>기간</dt><dd>' + periodText(r) + '</dd>' +
+        '<dt>분량</dt><dd>' + PLANNER.SCOPE_NAMES[r.scope] + ' ' + r.totalChapters.toLocaleString() + '장</dd>' +
       '</dl>';
 
     var html = '';
