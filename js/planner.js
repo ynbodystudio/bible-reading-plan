@@ -49,12 +49,17 @@ var PLANNER = (function () {
 
   // ---------- 성경 범위 ----------
 
+  // gid = 성경 전체에서 몇 번째 장인지 (창세기 1장 = 0, 요한계시록 22장 = 1188)
+  // 체크 기록은 gid로 저장해서, 범위(전체/구약/신약)가 달라도 같은 장을 가리키게 합니다.
   function getChapters(scope) {
     var list = [];
+    var gid = 0;
     BOOKS.forEach(function (book) {
-      if (scope !== 'all' && book[2] !== scope) return;
       book[3].forEach(function (verses, i) {
-        list.push({ name: book[0], abbr: book[1], ch: i + 1, verses: verses });
+        if (scope === 'all' || book[2] === scope) {
+          list.push({ gid: gid, name: book[0], abbr: book[1], ch: i + 1, verses: verses });
+        }
+        gid++;
       });
     });
     return list;
@@ -160,15 +165,23 @@ var PLANNER = (function () {
     }
   }
 
-  // settings: { scope, startDate, mode, periodValue, periodUnit, deadline, dailyMinutes, speed, weekdays }
+  // settings: { scope, startDate, mode, periodValue, periodUnit, deadline, dailyMinutes, speed, weekdays, startGid? }
+  // startGid가 있으면 그 장부터 남은 분량만 나눕니다. ("계획 다시 짜기"에서 사용)
+  // 결과의 from/to는 항상 범위 전체(chapters) 기준 번호입니다.
   function computePlan(s) {
     var chapters = getChapters(s.scope);
-    var totalVerses = chapters.reduce(function (sum, c) { return sum + c.verses; }, 0);
+    var startLocal = 0;
+    if (s.startGid !== undefined) {
+      while (startLocal < chapters.length && chapters[startLocal].gid < s.startGid) startLocal++;
+    }
+    var work = chapters.slice(startLocal); // 이번 계획으로 읽을 장들
+    var totalVerses = work.reduce(function (sum, c) { return sum + c.verses; }, 0);
     var speed = SPEEDS[s.speed];
     var result = { ok: false, error: null, warning: null };
 
     if (!s.startDate) return fail('시작일을 선택해주세요.');
     if (!s.weekdays.some(Boolean)) return fail('읽는 요일을 하루 이상 선택해주세요.');
+    if (!work.length) return fail('남은 분량이 없어요.');
 
     var endDate;
     var readingDays;
@@ -189,17 +202,17 @@ var PLANNER = (function () {
       var minutes = Number(s.dailyMinutes);
       if (!(minutes > 0)) return fail('하루 시간은 1분 이상으로 입력해주세요.');
       readingDays = Math.ceil(totalVerses / (minutes * speed));
-      readingDays = Math.min(readingDays, chapters.length);
+      readingDays = Math.min(readingDays, work.length);
       endDate = endDateForReadingDays(s.startDate, readingDays, s.weekdays);
     }
 
     if (readingDays < 1) return fail('기간 안에 읽는 요일이 하루도 없어요.');
-    if (readingDays > chapters.length) {
-      return fail('하루 1장보다 적게는 나눌 수 없어요. 읽는 날이 ' + chapters.length +
+    if (readingDays > work.length) {
+      return fail('하루 1장보다 적게는 나눌 수 없어요. 읽는 날이 ' + work.length +
         '일 이하가 되도록 기간을 줄여주세요. (지금 ' + readingDays + '일)');
     }
 
-    var groups = splitChapters(chapters, readingDays);
+    var groups = splitChapters(work, readingDays);
     var days = [];
     var gi = 0;
     for (var d = s.startDate; d <= endDate; d = addDays(d, 1)) {
@@ -207,8 +220,8 @@ var PLANNER = (function () {
         days.push({ date: d, rest: true });
         continue;
       }
-      var from = groups[gi][0];
-      var to = groups[gi][1];
+      var from = groups[gi][0] + startLocal;
+      var to = groups[gi][1] + startLocal;
       var verses = 0;
       for (var c = from; c <= to; c++) verses += chapters[c].verses;
       days.push({
@@ -225,16 +238,19 @@ var PLANNER = (function () {
     }
 
     result.ok = true;
+    result.chapters = chapters;
+    result.speed = speed;
     result.scope = s.scope;
     result.startDate = s.startDate;
     result.endDate = endDate;
     result.calendarDays = daysBetween(s.startDate, endDate) + 1;
     result.readingDays = readingDays;
-    result.totalChapters = chapters.length;
+    result.totalChapters = work.length;
     result.totalVerses = totalVerses;
-    result.chaptersPerDay = chapters.length / readingDays;
+    result.chaptersPerDay = work.length / readingDays;
     result.minutesPerDay = totalVerses / readingDays / speed;
     result.days = days;
+    result.segmentStart = s.startDate;
     if (result.minutesPerDay > MAX_MINUTES_WARNING * 3) {
       result.warning = '하루 3시간이 넘어요. 현실적으로 어려운 계획이에요.';
     } else if (result.minutesPerDay > MAX_MINUTES_WARNING) {
@@ -248,6 +264,42 @@ var PLANNER = (function () {
     }
   }
 
+  // ---------- 다시 짠 계획 합치기 ----------
+  // saved = 지금 계획 설정 + segments: [{ settings: 예전 설정, until: 'YYYY-MM-DD' }, ...]
+  // 예전 계획은 until 전날까지만, 그 뒤로는 지금 계획을 보여줍니다.
+  function computeSaved(saved) {
+    var current = computePlan(saved);
+    var segments = saved.segments || [];
+    if (!current.ok || !segments.length) return current;
+
+    var pastDays = [];
+    segments.forEach(function (seg) {
+      var r = computePlan(seg.settings);
+      if (!r.ok) return;
+      r.days.forEach(function (d) {
+        if (d.date < seg.until) pastDays.push(d);
+      });
+    });
+
+    var days = pastDays.concat(current.days);
+    var combined = Object.assign({}, current);
+    combined.days = days;
+    combined.startDate = segments[0].settings.startDate;
+    combined.calendarDays = daysBetween(combined.startDate, current.endDate) + 1;
+    combined.readingDays = days.filter(function (d) { return !d.rest; }).length;
+    combined.replanned = true;
+    return combined;
+  }
+
+  // 원래 처음 만든 계획 설정 (계획 수정 화면에 보여줄 값)
+  function baseSettings(saved) {
+    var base = saved.segments && saved.segments.length ? saved.segments[0].settings : saved;
+    base = JSON.parse(JSON.stringify(base));
+    delete base.segments;
+    delete base.startGid;
+    return base;
+  }
+
   return {
     SPEEDS: SPEEDS,
     SCOPE_NAMES: SCOPE_NAMES,
@@ -259,7 +311,12 @@ var PLANNER = (function () {
     weekdayOf: weekdayOf,
     getChapters: getChapters,
     splitChapters: splitChapters,
-    computePlan: computePlan
+    rangeLabel: rangeLabel,
+    daysBetween: daysBetween,
+    endDateForReadingDays: endDateForReadingDays,
+    computePlan: computePlan,
+    computeSaved: computeSaved,
+    baseSettings: baseSettings
   };
 })();
 

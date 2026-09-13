@@ -98,20 +98,92 @@
       </div>
     </main>
 
+    <!-- 오늘 화면 -->
+    <main id="view-today" class="view" hidden>
+      <p class="page-eyebrow">오늘</p>
+      <h2 class="page-title" id="today-title"></h2>
+      <p class="status-line" id="today-status"></p>
+      <section class="float-card" id="today-card"></section>
+      <section class="card" id="today-check"></section>
+      <section class="card last" id="today-progress"></section>
+    </main>
+
+    <!-- 캘린더 화면 -->
+    <main id="view-calendar" class="view" hidden>
+      <h2 class="page-title">캘린더</h2>
+      <p class="page-sub">날짜를 누르면 그날 체크를 고칠 수 있어요.</p>
+      <div class="cal-nav">
+        <button type="button" class="icon-btn" id="cal-prev" aria-label="이전 달">
+          <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <strong id="cal-title"></strong>
+        <button type="button" class="icon-btn" id="cal-next" aria-label="다음 달">
+          <svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <div class="cal-grid cal-head">
+        <span class="sun">일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+      <div class="legend">
+        <span><i class="st done"></i>다 읽음</span>
+        <span><i class="st part"></i>조금 읽음</span>
+        <span><i class="st miss"></i>안 읽음</span>
+      </div>
+      <section class="float-card" id="cal-summary"></section>
+    </main>
+
     <!-- 전체표 화면 -->
     <main id="view-table" class="view" hidden>
       <h2 class="page-title" id="summary-title"></h2>
       <p class="page-sub" id="summary-period"></p>
       <section class="float-card" id="summary"></section>
+      <div class="legend">
+        <span><i class="st done"></i>다 읽음</span>
+        <span><i class="st part"></i>조금 읽음</span>
+        <span><i class="st miss"></i>안 읽음</span>
+      </div>
       <div class="table" id="plan-table"></div>
       <div class="actions">
-        <button type="button" class="btn secondary" id="btn-edit">계획 수정하기</button>
+        <button type="button" class="btn secondary" id="btn-replan-table">계획 다시 짜기</button>
+        <button type="button" class="btn ghost" id="btn-edit">새 계획 만들기</button>
       </div>
     </main>
   </div>
 
+  <!-- 아래에서 올라오는 창 -->
+  <div class="sheet" id="sheet" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true">
+      <div class="sheet-top">
+        <span class="sheet-handle"></span>
+        <button type="button" class="icon-btn sheet-close" data-close aria-label="닫기">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div id="sheet-body"></div>
+    </div>
+  </div>
+
+  <!-- 아래 탭 -->
+  <nav class="tabbar" id="tabbar" hidden>
+    <button type="button" data-tab="today">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5C10 5 7.2 4.4 4 4.6v13.2c3.2-.2 6 .4 8 1.9 2-1.5 4.8-2.1 8-1.9V4.6C16.8 4.4 14 5 12 6.5zM12 6.5v13.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      <span>오늘</span>
+    </button>
+    <button type="button" data-tab="calendar">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="14.5" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <span>캘린더</span>
+    </button>
+    <button type="button" data-tab="table">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 9.5h16M4 14.5h16M9.5 9.5V20" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+      <span>전체표</span>
+    </button>
+  </nav>
+
   <script src="js/bible-data.js"></script>
   <script src="js/planner.js"></script>
+  <script src="js/progress.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
