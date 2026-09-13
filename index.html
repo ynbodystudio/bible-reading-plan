@@ -5,6 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#ffffff">
   <title>나만의 성경통독표</title>
+
+  <!-- 홈 화면 앱 설정 -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="통독표">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -96,6 +106,7 @@
         <button type="button" class="btn primary" id="btn-create">이 계획으로 통독표 만들기</button>
         <button type="button" class="btn ghost" id="btn-cancel" hidden>취소</button>
       </div>
+      <p class="replan-link" id="setup-import" hidden>폰을 바꿨나요? <button type="button" id="btn-setup-import">백업 파일 불러오기</button></p>
     </main>
 
     <!-- 오늘 화면 -->
@@ -144,10 +155,41 @@
         <span><i class="st miss"></i>안 읽음</span>
       </div>
       <div class="table" id="plan-table"></div>
-      <div class="actions">
-        <button type="button" class="btn secondary" id="btn-replan-table">계획 다시 짜기</button>
-        <button type="button" class="btn ghost" id="btn-edit">새 계획 만들기</button>
-      </div>
+    </main>
+
+    <!-- 설정 화면 -->
+    <main id="view-settings" class="view" hidden>
+      <h2 class="page-title">설정</h2>
+
+      <section class="card">
+        <h2>내 계획</h2>
+        <div class="plan-line" id="set-plan"></div>
+        <div class="actions">
+          <button type="button" class="btn secondary" id="btn-replan">계획 다시 짜기</button>
+          <button type="button" class="btn ghost" id="btn-edit">새 계획 만들기</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>백업</h2>
+        <p class="hint">체크 기록은 이 폰 안에만 저장돼요. 폰을 바꾸거나 앱을 지우면 사라지니, 한 달에 한 번쯤 파일로 저장해두세요.</p>
+        <p class="backup-status" id="backup-status"></p>
+        <div class="actions">
+          <button type="button" class="btn primary" id="btn-export">백업 파일 저장하기</button>
+          <button type="button" class="btn secondary" id="btn-import">백업 파일 불러오기</button>
+          <input type="file" id="import-file" accept="application/json,.json" hidden>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>지난 통독</h2>
+        <div id="archive-list"></div>
+      </section>
+
+      <section class="card last" id="install-guide">
+        <h2>아이폰 홈 화면에 추가하기</h2>
+        <div id="install-body"></div>
+      </section>
     </main>
   </div>
 
@@ -178,6 +220,10 @@
     <button type="button" data-tab="table">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 9.5h16M4 14.5h16M9.5 9.5V20" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
       <span>전체표</span>
+    </button>
+    <button type="button" data-tab="settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="15" cy="7" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="17" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+      <span>설정</span>
     </button>
   </nav>
 

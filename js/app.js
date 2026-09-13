@@ -4,6 +4,8 @@
   var PLAN_KEY = 'brp.plan.v1';       // 계획 설정
   var LOG_KEY = 'brp.log.v1';         // 체크 기록 { 'YYYY-MM-DD': gid }
   var ARCHIVE_KEY = 'brp.archive.v1'; // 지난 통독 보관함
+  var META_KEY = 'brp.meta.v1';       // 기타 정보 { lastBackup }
+  var APP_ID = 'bible-reading-plan';  // 백업 파일 확인용 이름
   var WD = PLANNER.WEEKDAY_NAMES;
 
   var $ = function (id) { return document.getElementById(id); };
@@ -18,6 +20,7 @@
   var lastResult = null; // 계획 만들기 화면의 미리보기 결과
   var plan = null;       // 저장된 계획의 계산 결과
   var currentView = null;
+  var previousView = null; // 계획 만들기에서 "취소"를 누르면 돌아갈 화면
   var extraDays = 0;     // 오늘 화면에서 "다음 분량 미리 읽기"를 누른 횟수
   var calMonth = null;   // 캘린더에 보이는 달 'YYYY-MM'
   var sheetState = null; // 열려 있는 창 { type: 'day', date } 또는 { type: 'replan', choice }
@@ -85,8 +88,9 @@
   // ---------- 화면 전환 ----------
 
   function show(view) {
+    if (view === 'setup' && currentView && currentView !== 'setup') previousView = currentView;
     currentView = view;
-    ['setup', 'today', 'calendar', 'table'].forEach(function (v) {
+    ['setup', 'today', 'calendar', 'table', 'settings'].forEach(function (v) {
       $('view-' + v).hidden = v !== view;
     });
     var tabs = view !== 'setup';
@@ -105,6 +109,7 @@
     if (currentView === 'today') renderToday();
     if (currentView === 'calendar') renderCalendar();
     if (currentView === 'table') renderTable();
+    if (currentView === 'settings') renderSettings();
     if (currentView === 'setup') renderSetup();
   }
 
@@ -181,7 +186,7 @@
     });
 
     $('btn-cancel').addEventListener('click', function () {
-      show('table');
+      show(previousView || 'today');
     });
 
     $('btn-edit').addEventListener('click', function () {
@@ -189,7 +194,7 @@
       show('setup');
     });
 
-    $('btn-replan-table').addEventListener('click', openReplanSheet);
+    $('btn-replan').addEventListener('click', openReplanSheet);
   }
 
   // 기준(기간/마감일/하루 시간)을 바꿀 때, 지금 계산된 값을 새 칸에 미리 채워줍니다.
@@ -228,6 +233,7 @@
       chapters.length.toLocaleString() + '장';
 
     $('btn-cancel').hidden = !saved;
+    $('setup-import').hidden = !!saved;
 
     lastResult = PLANNER.computePlan(settings);
     renderPreview(lastResult);
@@ -292,6 +298,7 @@
   function initToday() {
     $('today-card').addEventListener('click', function (e) {
       if (e.target.closest('[data-replan]')) openReplanSheet();
+      if (e.target.closest('[data-new-plan]')) startNewPlan();
     });
 
     $('today-check').addEventListener('click', function (e) {
@@ -348,7 +355,8 @@
       card =
         '<div class="celebrate">🎉</div>' +
         '<p class="today-range msg">' + PLANNER.SCOPE_NAMES[p.scope] + ' 통독을 마쳤어요</p>' +
-        '<p class="today-meta">' + prettyDate(p.startDate) + '부터 함께 걸어온 길이에요.</p>';
+        '<p class="today-meta">' + prettyDate(p.startDate) + '부터 함께 걸어온 길이에요.</p>' +
+        '<div class="actions"><button type="button" class="btn primary" data-new-plan>새 통독 시작하기</button></div>';
     } else if (g.phase === 'before') {
       var first = p.days.filter(function (d) { return !d.rest; })[0];
       var dday = Math.round((PLANNER.parseDate(p.startDate) - PLANNER.parseDate(today)) / 86400000);
@@ -460,7 +468,6 @@
     var r = planOrSetup();
     if (!r) return;
     var g = PROGRESS.compute(r, log, today);
-    $('btn-replan-table').hidden = g.finished || g.phase === 'before';
 
     $('summary-title').textContent = PLANNER.SCOPE_NAMES[r.scope] + ' 통독표';
     $('summary-period').textContent = prettyDate(r.startDate) + ' ~ ' + prettyDate(r.endDate);
@@ -757,12 +764,202 @@
     show('today');
   }
 
+  // ---------- 설정 화면 ----------
+
+  function initSettings() {
+    $('btn-export').addEventListener('click', exportBackup);
+    $('btn-import').addEventListener('click', function () { $('import-file').click(); });
+    $('btn-setup-import').addEventListener('click', function () { $('import-file').click(); });
+    $('import-file').addEventListener('change', function () {
+      var file = this.files && this.files[0];
+      this.value = '';
+      if (file) importBackup(file);
+    });
+  }
+
+  // 완독 후 "새 통독 시작하기": 예전 설정을 가져오되 시작일은 오늘로
+  function startNewPlan() {
+    settings = PLANNER.baseSettings(saved);
+    settings.startDate = today;
+    if (settings.mode === 'deadline') {
+      settings.mode = 'period';
+      settings.periodValue = 1;
+      settings.periodUnit = 'year';
+    }
+    show('setup');
+  }
+
+  function renderSettings() {
+    var p = planOrSetup();
+    if (!p) return;
+    var g = PROGRESS.compute(p, log, today);
+
+    $('set-plan').innerHTML =
+      '<strong>' + PLANNER.SCOPE_NAMES[p.scope] + ' 통독 · ' + formatPercent(g.percent) + '</strong>' +
+      '<span>~ ' + shortDate(p.endDate) + '</span>';
+    $('btn-replan').hidden = g.finished || g.phase === 'before';
+
+    // 백업 상태
+    var meta = load(META_KEY, {});
+    var status = $('backup-status');
+    if (!meta.lastBackup) {
+      status.textContent = Object.keys(log).length ? '아직 백업한 적이 없어요.' : '';
+      status.className = 'backup-status' + (Object.keys(log).length ? ' warn' : '');
+    } else {
+      var days = PLANNER.daysBetween(meta.lastBackup, today);
+      status.textContent = '마지막 백업: ' + prettyDate(meta.lastBackup) + (days > 0 ? ' (' + days + '일 전)' : ' (오늘)');
+      status.className = 'backup-status' + (days >= 30 ? ' warn' : '');
+    }
+
+    renderArchive(g);
+    renderInstallGuide();
+  }
+
+  function renderArchive(currentProgress) {
+    var archive = load(ARCHIVE_KEY, []);
+    var finishedCount = currentProgress.finished ? 1 : 0;
+    var items = '';
+    archive.slice().reverse().forEach(function (entry) {
+      var p = PLANNER.computeSaved(entry.plan);
+      if (!p.ok) return;
+      var g = PROGRESS.compute(p, entry.log || {}, entry.archivedAt);
+      if (g.finished) finishedCount++;
+      items += '<div class="archive-item"><div>' +
+        '<strong>' + PLANNER.SCOPE_NAMES[p.scope] + ' 통독</strong>' +
+        '<small>' + shortYmd(p.startDate) + ' ~ ' + shortYmd(entry.archivedAt) + '</small></div>' +
+        '<span class="pct' + (g.finished ? ' done' : '') + '">' + (g.finished ? '완독' : formatPercent(g.percent)) + '</span></div>';
+    });
+
+    $('archive-list').innerHTML =
+      '<p class="archive-count"><b>' + finishedCount + '</b><span>번 완독했어요</span></p>' +
+      (items || '<p class="hint" style="margin:0">아직 지난 통독이 없어요. 새 계획을 만들면 지금 기록이 여기에 보관돼요.</p>');
+  }
+
+  function shortYmd(str) {
+    var d = PLANNER.parseDate(str);
+    return d.getFullYear() + '.' + (d.getMonth() + 1) + '.' + d.getDate();
+  }
+
+  function isStandalone() {
+    return window.navigator.standalone === true ||
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  }
+
+  function renderInstallGuide() {
+    if (isStandalone()) {
+      $('install-body').innerHTML = '<p class="installed-note">✅ 홈 화면 앱으로 쓰고 있어요.</p>';
+      return;
+    }
+    var url = location.protocol.indexOf('http') === 0 ? location.href.split('#')[0].split('?')[0] : '';
+    var shareIcon = '<svg class="share-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5L12 3l4.5 4.5M5 11v8a2 2 0 002 2h10a2 2 0 002-2v-8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    $('install-body').innerHTML =
+      '<ol class="steps">' +
+        '<li>아이폰 <b>사파리</b>로 이 앱 주소를 열어요.' + (url ? '<span class="url-box">' + escapeHtml(url) + '</span>' : '') + '</li>' +
+        '<li>화면 아래의 <b>공유 버튼</b> ' + shareIcon + ' 을 눌러요.</li>' +
+        '<li><b>"홈 화면에 추가"</b>를 누르고, 오른쪽 위 <b>"추가"</b>를 눌러요.</li>' +
+      '</ol>' +
+      '<p class="hint" style="margin-top:0">⚠️ 사파리 창과 홈 화면 앱은 기록이 <b>따로</b> 저장돼요. 추가한 뒤에는 홈 화면 아이콘으로만 열어주세요.</p>';
+  }
+
+  // --- 백업 ---
+
+  function backupData() {
+    return {
+      app: APP_ID,
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      plan: saved,
+      log: log,
+      archive: load(ARCHIVE_KEY, [])
+    };
+  }
+
+  function exportBackup() {
+    var json = JSON.stringify(backupData(), null, 2);
+    var name = 'bible-backup-' + today + '.json';
+    var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    // 아이폰: 공유 창으로 "파일에 저장" (가장 확실한 방법)
+    if (isIOS && typeof File === 'function' && navigator.canShare) {
+      var file = new File([json], name, { type: 'application/json' });
+      if (navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: '성경통독표 백업' })
+          .then(markBackedUp)
+          .catch(function (err) { if (err && err.name !== 'AbortError') downloadFile(json, name); });
+        return;
+      }
+    }
+    downloadFile(json, name);
+  }
+
+  function downloadFile(text, name) {
+    var url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+    markBackedUp();
+  }
+
+  function markBackedUp() {
+    var meta = load(META_KEY, {});
+    meta.lastBackup = today;
+    store(META_KEY, meta);
+    if (currentView === 'settings') renderSettings();
+  }
+
+  function importBackup(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var data;
+      try { data = JSON.parse(reader.result); } catch (e) { data = null; }
+      if (!data || data.app !== APP_ID || !data.plan || typeof data.log !== 'object' || !data.log) {
+        alert('성경통독표 백업 파일이 아니에요. 파일을 다시 확인해주세요.');
+        return;
+      }
+      if (!PLANNER.computeSaved(data.plan).ok) {
+        alert('백업 파일의 계획을 읽을 수 없어요.');
+        return;
+      }
+      var when = data.exportedAt ? prettyDate(PLANNER.formatDate(new Date(data.exportedAt))) : '알 수 없는 날짜';
+      var ok = confirm(when + '에 저장한 백업을 불러올까요?\n\n지금 이 폰에 있는 계획과 체크 기록은 백업 파일 내용으로 바뀌어요.');
+      if (!ok) return;
+
+      saved = data.plan;
+      log = data.log;
+      plan = null;
+      store(PLAN_KEY, saved);
+      store(LOG_KEY, log);
+      store(ARCHIVE_KEY, Array.isArray(data.archive) ? data.archive : []);
+      // 불러온 백업 파일을 만든 날을 "마지막 백업"으로 기억
+      if (data.exportedAt) {
+        var meta = load(META_KEY, {});
+        meta.lastBackup = PLANNER.formatDate(new Date(data.exportedAt));
+        store(META_KEY, meta);
+      }
+      alert('백업을 불러왔어요.');
+      show('today');
+    };
+    reader.onerror = function () { alert('파일을 읽지 못했어요.'); };
+    reader.readAsText(file);
+  }
+
   // ---------- 시작 ----------
 
   initSetup();
   initToday();
   initCalendar();
   initSheet();
+  initSettings();
   initTabs();
   show(saved ? 'today' : 'setup');
+
+  // 인터넷 주소(https)로 열었을 때만 서비스 워커 등록 (내 컴퓨터 파일로 열면 건너뜀)
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  }
 })();
