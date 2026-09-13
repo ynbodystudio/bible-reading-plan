@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f3ec">
+  <title>나만의 성경통독표</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <h1>나만의 성경통독표</h1>
+    </header>
+
+    <!-- 계획 만들기 화면 -->
+    <main id="view-setup" class="view" hidden>
+      <section class="card">
+        <h2>무엇을 읽을까요?</h2>
+        <div class="seg" data-name="scope">
+          <button type="button" data-value="all">전체</button>
+          <button type="button" data-value="OT">구약</button>
+          <button type="button" data-value="NT">신약</button>
+        </div>
+        <p class="hint" id="scope-hint"></p>
+      </section>
+
+      <section class="card">
+        <h2>언제 시작할까요?</h2>
+        <input type="date" id="startDate" class="field">
+      </section>
+
+      <section class="card">
+        <h2>어떻게 계획할까요?</h2>
+        <p class="hint">셋 중 편한 걸로 하나만 정하면, 나머지는 자동으로 계산해요.</p>
+        <div class="seg" data-name="mode">
+          <button type="button" data-value="period">기간</button>
+          <button type="button" data-value="deadline">마감일</button>
+          <button type="button" data-value="daily">하루 시간</button>
+        </div>
+
+        <div class="mode-panel" data-mode="period">
+          <div class="row">
+            <input type="number" id="periodValue" class="field" min="1" step="1" inputmode="numeric">
+            <select id="periodUnit" class="field">
+              <option value="day">일</option>
+              <option value="month">개월</option>
+              <option value="year">년</option>
+            </select>
+            <span class="row-text">동안</span>
+          </div>
+        </div>
+        <div class="mode-panel" data-mode="deadline">
+          <div class="row">
+            <input type="date" id="deadline" class="field">
+            <span class="row-text">까지</span>
+          </div>
+        </div>
+        <div class="mode-panel" data-mode="daily">
+          <div class="row">
+            <span class="row-text">하루</span>
+            <input type="number" id="dailyMinutes" class="field" min="1" step="1" inputmode="numeric">
+            <span class="row-text">분씩</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>읽기 속도</h2>
+        <div class="seg" data-name="speed">
+          <button type="button" data-value="slow">느림</button>
+          <button type="button" data-value="normal">보통</button>
+          <button type="button" data-value="fast">빠름</button>
+        </div>
+        <p class="hint">묵상하며 천천히 읽는다면 '느림'을 골라주세요. 시간 계산에만 쓰여요.</p>
+      </section>
+
+      <section class="card">
+        <h2>읽는 요일</h2>
+        <div class="weekdays" id="weekdays"></div>
+        <p class="hint">빼둔 요일은 쉬는 날이에요. 밀린 분량을 따라잡는 날로 쓰세요.</p>
+      </section>
+
+      <section class="card preview" id="preview" aria-live="polite"></section>
+
+      <div class="actions">
+        <button type="button" class="btn primary" id="btn-create">이 계획으로 통독표 만들기</button>
+        <button type="button" class="btn ghost" id="btn-cancel" hidden>취소</button>
+      </div>
+    </main>
+
+    <!-- 전체표 화면 -->
+    <main id="view-table" class="view" hidden>
+      <section class="card summary" id="summary"></section>
+      <div class="table" id="plan-table"></div>
+      <div class="actions">
+        <button type="button" class="btn ghost" id="btn-edit">계획 수정하기</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/bible-data.js"></script>
+  <script src="js/planner.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
