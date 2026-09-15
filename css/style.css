@@ -5,9 +5,14 @@
 
 :root {
   color-scheme: light;
-  --primary: #ff385c;
-  --primary-active: #e00b41;
-  --primary-disabled: #ffd1da;
+  --primary: #6a3d8f;         /* 포도색: 버튼·탭·오늘 표시 */
+  --primary-active: #522c70;
+  --primary-disabled: #d9c9e6;
+  --grape: #6a3d8f;           /* 읽음 채우기 */
+  --grape-soft: #efe7f5;      /* 아직 안 익은 포도알 */
+  --grape-line: #dccbe8;
+  --vine: #8a7a52;            /* 포도나무 줄기 */
+  --leaf: #7fa650;            /* 잎사귀 */
   --error: #c13515;
   --ink: #222222;
   --body: #3f3f3f;
@@ -60,7 +65,7 @@ button { -webkit-tap-highlight-color: transparent; }
   gap: 8px;
 }
 
-.logo { width: 28px; height: 28px; color: var(--primary); flex: none; }
+.logo { width: 28px; height: 28px; flex: none; }
 
 .topbar h1 {
   margin: 0;
@@ -370,10 +375,10 @@ select.field:focus { padding-right: 35px; }
 }
 
 .st.done {
-  background: var(--ink) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='M5 9.2l2.6 2.6L13 6.4' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 18px no-repeat;
+  background: var(--grape) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 18'%3E%3Cpath d='M5 9.2l2.6 2.6L13 6.4' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 18px no-repeat;
 }
 
-.st.part { border: 2px solid var(--ink); background: linear-gradient(90deg, var(--ink) 50%, transparent 50%); }
+.st.part { border: 2px solid var(--grape); background: linear-gradient(90deg, var(--grape) 50%, transparent 50%); }
 .st.miss { border: 1.5px solid var(--border-strong, #c1c1c1); }
 .st.rest-read { width: 8px; height: 8px; margin: 5px; background: var(--muted-soft); }
 
@@ -428,8 +433,8 @@ select.field:focus { padding-right: 35px; }
 
 .status-line:empty { display: none; }
 .status-line .dot { width: 8px; height: 8px; border-radius: var(--r-full); background: var(--muted-soft); }
-.status-line .dot.good { background: #008a05; }
-.status-line .dot.behind { background: var(--primary); }
+.status-line .dot.good { background: var(--grape); }
+.status-line .dot.behind { background: var(--muted-soft); }
 
 .today-range {
   margin: 4px 0 4px;
@@ -476,8 +481,8 @@ select.field:focus { padding-right: 35px; }
   cursor: pointer;
 }
 
-.chip.read { background: var(--surface-strong); border-color: var(--surface-strong); color: var(--ink); }
-.chip.end { background: var(--ink); border-color: var(--ink); color: #fff; font-weight: 700; }
+.chip.read { background: var(--grape-soft); border-color: var(--grape-soft); color: var(--grape); }
+.chip.end { background: var(--grape); border-color: var(--grape); color: #fff; font-weight: 700; }
 
 /* 오늘 목표 지점: 작은 빨간 점 */
 .chip.goal::after {
@@ -503,7 +508,7 @@ select.field:focus { padding-right: 35px; }
   overflow: hidden;
 }
 
-.progress-bar > div { height: 100%; border-radius: var(--r-full); background: var(--ink); min-width: 8px; }
+.progress-bar > div { height: 100%; border-radius: var(--r-full); background: var(--grape); min-width: 8px; }
 .progress-bar > div.zero { min-width: 0; }
 
 .progress-row { display: flex; justify-content: space-between; align-items: baseline; }
@@ -633,8 +638,8 @@ body.has-tabbar .app { padding-bottom: calc(96px + env(safe-area-inset-bottom));
 
 .cal-cell.out .cal-num { color: var(--hairline); }
 .cal-cell.rest .cal-num { color: var(--muted-soft); }
-.cal-cell.done .cal-num { background: var(--ink); color: #fff; font-weight: 600; }
-.cal-cell.part .cal-num { background: linear-gradient(90deg, var(--surface-strong) 50%, var(--canvas) 50%); box-shadow: inset 0 0 0 2px var(--ink); font-weight: 600; }
+.cal-cell.done .cal-num { background: var(--grape); color: #fff; font-weight: 600; }
+.cal-cell.part .cal-num { background: linear-gradient(90deg, var(--grape-soft) 50%, var(--canvas) 50%); box-shadow: inset 0 0 0 2px var(--grape); color: var(--grape); font-weight: 600; }
 .cal-cell.miss .cal-num { box-shadow: inset 0 0 0 1.5px #c1c1c1; color: var(--muted); }
 .cal-cell.rest-read .cal-label::before { content: "● "; color: var(--muted-soft); }
 .cal-cell.today .cal-num { box-shadow: inset 0 0 0 2px var(--primary); }
@@ -790,7 +795,7 @@ body.has-tabbar .app { padding-bottom: calc(96px + env(safe-area-inset-bottom));
 .archive-item strong { display: block; font-size: 15px; font-weight: 600; }
 .archive-item small { display: block; font-size: 13px; color: var(--muted); }
 .archive-item .pct { flex: none; font-size: 15px; font-weight: 600; }
-.archive-item .pct.done { color: #008a05; }
+.archive-item .pct.done { color: var(--grape); }
 
 .steps {
   margin: 0;
@@ -841,3 +846,66 @@ body.has-tabbar .app { padding-bottom: calc(96px + env(safe-area-inset-bottom));
 }
 
 .installed-note { margin: 0; font-size: 15px; }
+
+/* ---------- 나의 포도나무 ---------- */
+/* 성경 한 권 = 포도송이 하나. 읽은 만큼 포도알이 포도색으로 익어요. */
+
+.vine {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  margin: 8px -4px 0;
+}
+
+.vine-cell {
+  position: relative;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: center;
+}
+
+.vine-cell svg { display: block; width: 100%; height: auto; overflow: visible; }
+.vine-stem { fill: none; stroke: var(--vine); stroke-width: 2.4; stroke-linecap: round; }
+.vine-leaf { fill: var(--leaf); }
+.grape { fill: var(--grape-soft); stroke: var(--grape-line); stroke-width: 0.8; }
+.grape.ripe { fill: var(--grape); stroke: var(--grape); }
+.grape-shine { fill: #fff; opacity: 0.25; }
+
+.vine-name {
+  display: block;
+  margin-top: -2px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--muted-soft);
+  white-space: nowrap;
+}
+
+.vine-cell.done .vine-name { color: var(--grape); font-weight: 700; }
+.vine-cell.current .vine-name { color: var(--ink); font-weight: 700; }
+
+.vine-cell.current::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: var(--r-full);
+  background: var(--ink);
+}
+
+.vine-count {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.vine-count strong { font-size: 22px; font-weight: 700; }
+.vine-count strong em { font-style: normal; color: var(--grape); }
+
+.vine-group + .vine-group { margin-top: 24px; }
+.vine-group h4 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+.vine-group h4 small { margin-left: 6px; font-weight: 400; color: var(--muted); }
+.vine + .vine { margin-top: 10px; }

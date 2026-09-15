@@ -301,6 +301,10 @@
       if (e.target.closest('[data-new-plan]')) startNewPlan();
     });
 
+    $('today-progress').addEventListener('click', function (e) {
+      if (e.target.closest('[data-vine]')) openSheet({ type: 'vine' });
+    });
+
     $('today-check').addEventListener('click', function (e) {
       var btn = e.target.closest('button');
       if (!btn) return;
@@ -353,7 +357,7 @@
 
     if (g.finished) {
       card =
-        '<div class="celebrate">🎉</div>' +
+        '<div class="celebrate">🍇</div>' +
         '<p class="today-range msg">' + PLANNER.SCOPE_NAMES[p.scope] + ' 통독을 마쳤어요</p>' +
         '<p class="today-meta">' + prettyDate(p.startDate) + '부터 함께 걸어온 길이에요.</p>' +
         '<div class="actions"><button type="button" class="btn primary" data-new-plan>새 통독 시작하기</button></div>';
@@ -417,16 +421,110 @@
     $('today-check').innerHTML = check;
     $('today-check').hidden = !check;
 
-    // --- 전체 진도 ---
-    var where = g.bookmark >= 0 ?
-      '📍 ' + escapeHtml(chapters[g.bookmark].name + ' ' + chapters[g.bookmark].ch + '장') + '까지 읽었어요' :
-      '아직 체크한 곳이 없어요';
+    // --- 나의 포도나무 (전체 진도) ---
+    var books = vineBooks(p, g.bookmark);
+    var ripeCount = books.filter(function (b) { return b.read === b.count; }).length;
+    var cur = currentBookIndex(books);
+    var start = Math.max(0, Math.min(cur - 2, books.length - 6));
+    var curBook = books[cur];
+    var where = g.bookmark < 0 ? '아직 열린 포도알이 없어요. 첫 장을 읽으면 익기 시작해요.' :
+      g.finished ? '모든 송이가 다 익었어요 🍇' :
+      '📍 ' + escapeHtml(chapters[g.bookmark].name + ' ' + chapters[g.bookmark].ch + '장') + '까지 · ' +
+        escapeHtml(curBook.name) + ' 송이 ' + Math.floor(curBook.read / curBook.count * 100) + '% 익었어요';
     $('today-progress').innerHTML =
-      '<h2>전체 진도</h2>' +
-      '<div class="progress-row"><strong>' + formatPercent(g.percent) + '</strong>' +
-        '<span class="today-meta">' + (g.bookmark + 1) + ' / ' + g.n + '장</span></div>' +
-      '<div class="progress-bar"><div class="' + (g.percent > 0 ? '' : 'zero') + '" style="width:' + g.percent + '%"></div></div>' +
-      '<p class="today-meta">' + where + '</p>';
+      '<h2>나의 포도나무</h2>' +
+      '<div class="vine-count"><strong><em>' + ripeCount + '</em>송이 열렸어요</strong>' +
+        '<span class="today-meta">' + books.length + '송이 중 · 전체 ' + formatPercent(g.percent) + '</span></div>' +
+      vineRowHtml(books, start, Math.min(start + 6, books.length), cur) +
+      '<p class="today-meta" style="margin-top:14px">' + where + '</p>' +
+      '<div class="actions"><button type="button" class="btn secondary" data-vine>포도나무 전체 보기</button></div>';
+  }
+
+  // ---------- 포도나무 그리기 ----------
+  // 성경 한 권 = 포도송이 하나(포도알 10개). 읽은 장 비율만큼 포도알이 익어요.
+
+  var GRAPES = [
+    [12.5, 30], [24.5, 30], [36.5, 30], [48.5, 30],
+    [18.5, 40.5], [30.5, 40.5], [42.5, 40.5],
+    [24.5, 51], [36.5, 51],
+    [30.5, 61.5]
+  ];
+
+  function vineBooks(p, bookmark) {
+    var books = [];
+    p.chapters.forEach(function (c, i) {
+      var last = books[books.length - 1];
+      if (!last || last.name !== c.name) {
+        books.push({ name: c.name, abbr: c.abbr, start: i, count: 0, gid: c.gid });
+        last = books[books.length - 1];
+      }
+      last.count++;
+    });
+    books.forEach(function (b) {
+      b.read = Math.max(0, Math.min(b.count, bookmark - b.start + 1));
+    });
+    return books;
+  }
+
+  // 지금 읽고 있는(다음에 읽을) 책
+  function currentBookIndex(books) {
+    for (var i = 0; i < books.length; i++) if (books[i].read < books[i].count) return i;
+    return books.length - 1;
+  }
+
+  function ripeGrapes(book) {
+    if (book.read >= book.count) return GRAPES.length;
+    if (book.read <= 0) return 0;
+    return Math.min(GRAPES.length - 1, Math.max(1, Math.round(book.read / book.count * GRAPES.length)));
+  }
+
+  function clusterSvg(book, index) {
+    var ripe = ripeGrapes(book);
+    var svg = '<svg viewBox="0 0 60 70" aria-hidden="true">' +
+      '<path class="vine-stem" d="M0 12 C15 7 45 17 60 12"/>' +
+      '<path class="vine-stem" d="M30 13 L30 25" style="stroke-width:1.6"/>';
+    if (index % 3 === 1) svg += '<path class="vine-leaf" d="M32 11 C36 2 48 1 55 5 C49 12 39 15 32 11Z"/>';
+    GRAPES.forEach(function (pt, i) {
+      svg += '<circle class="grape' + (i < ripe ? ' ripe' : '') + '" cx="' + pt[0] + '" cy="' + pt[1] + '" r="6.2"/>';
+      if (i < ripe) svg += '<circle class="grape-shine" cx="' + (pt[0] - 2) + '" cy="' + (pt[1] - 2) + '" r="1.6"/>';
+    });
+    return svg + '</svg>';
+  }
+
+  function vineRowHtml(books, from, to, current) {
+    var html = '<div class="vine">';
+    for (var i = from; i < to; i++) {
+      var b = books[i];
+      var cls = 'vine-cell' + (b.read === b.count ? ' done' : '') + (i === current && b.read < b.count ? ' current' : '');
+      html += '<div class="' + cls + '" title="' + escapeHtml(b.name + ' ' + b.read + ' / ' + b.count + '장') + '">' +
+        clusterSvg(b, i) + '<span class="vine-name">' + escapeHtml(b.abbr) + '</span></div>';
+    }
+    return html + '</div>';
+  }
+
+  function vineSheetHtml() {
+    var p = getPlan();
+    var g = PROGRESS.compute(p, log, today);
+    var books = vineBooks(p, g.bookmark);
+    var cur = currentBookIndex(books);
+    var ripeCount = books.filter(function (b) { return b.read === b.count; }).length;
+
+    var groups = [];
+    if (p.scope === 'all') {
+      groups.push({ title: '구약', from: 0, to: 39 }, { title: '신약', from: 39, to: books.length });
+    } else {
+      groups.push({ title: PLANNER.SCOPE_NAMES[p.scope], from: 0, to: books.length });
+    }
+
+    var html = '<h3>나의 포도나무</h3>' +
+      '<p class="sheet-sub">성경 한 권을 다 읽으면 포도송이 하나가 다 익어요. 지금 ' + ripeCount + '송이가 열렸어요.</p>';
+    groups.forEach(function (grp) {
+      var done = books.slice(grp.from, grp.to).filter(function (b) { return b.read === b.count; }).length;
+      html += '<div class="vine-group"><h4>' + grp.title + '<small>' + done + ' / ' + (grp.to - grp.from) + '송이</small></h4>';
+      for (var i = grp.from; i < grp.to; i += 6) html += vineRowHtml(books, i, Math.min(i + 6, grp.to), cur);
+      html += '</div>';
+    });
+    return html;
   }
 
   function rangeMeta(g, p, from, to) {
@@ -601,7 +699,7 @@
       var btn = e.target.closest('button');
       if (!btn || !sheetState) return;
       if (sheetState.type === 'day') onDaySheetClick(btn);
-      else onReplanSheetClick(btn);
+      else if (sheetState.type === 'replan') onReplanSheetClick(btn);
     });
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && sheetState) closeSheet();
@@ -624,7 +722,9 @@
 
   function renderSheet() {
     if (!sheetState) return;
-    $('sheet-body').innerHTML = sheetState.type === 'day' ? daySheetHtml(sheetState.date) : replanSheetHtml();
+    $('sheet-body').innerHTML =
+      sheetState.type === 'day' ? daySheetHtml(sheetState.date) :
+      sheetState.type === 'vine' ? vineSheetHtml() : replanSheetHtml();
   }
 
   // --- 날짜 창: 그날 계획 + 어디까지 읽었나요? ---
