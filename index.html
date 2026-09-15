@@ -171,6 +171,29 @@
         </div>
       </section>
 
+      <section class="card" id="notify-card">
+        <h2>알림</h2>
+        <p class="hint">정한 시간에 폰으로 알려드려요. 아침 알림에는 오늘 읽을 곳이 함께 나와요.</p>
+        <div class="notify-rows">
+          <div class="notify-row">
+            <div class="notify-label"><strong>아침</strong><span>성경 묵상할 시간이에요</span></div>
+            <input type="time" id="notify-morning-time" class="field time">
+            <label class="switch"><input type="checkbox" id="notify-morning-on" aria-label="아침 알림"><span></span></label>
+          </div>
+          <div class="notify-row">
+            <div class="notify-label"><strong>저녁</strong><span>말씀에 귀 기울였나요?</span></div>
+            <input type="time" id="notify-evening-time" class="field time">
+            <label class="switch"><input type="checkbox" id="notify-evening-on" aria-label="저녁 알림"><span></span></label>
+          </div>
+        </div>
+        <p class="notify-status" id="notify-status"></p>
+        <div class="actions">
+          <button type="button" class="btn primary" id="btn-notify-on">알림 켜기</button>
+          <button type="button" class="btn secondary" id="btn-notify-test" hidden>테스트 알림 보내기</button>
+          <button type="button" class="btn ghost" id="btn-notify-off" hidden>알림 끄기</button>
+        </div>
+      </section>
+
       <section class="card">
         <h2>백업</h2>
         <p class="hint">체크 기록은 이 폰 안에만 저장돼요. 폰을 바꾸거나 앱을 지우면 사라지니, 한 달에 한 번쯤 파일로 저장해두세요.</p>

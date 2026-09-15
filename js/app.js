@@ -5,7 +5,13 @@
   var LOG_KEY = 'brp.log.v1';         // 체크 기록 { 'YYYY-MM-DD': gid }
   var ARCHIVE_KEY = 'brp.archive.v1'; // 지난 통독 보관함
   var META_KEY = 'brp.meta.v1';       // 기타 정보 { lastBackup }
+  var NOTIFY_KEY = 'brp.notify.v1';   // 알림 설정 (이 폰에만 해당, 백업하지 않음)
   var APP_ID = 'bible-reading-plan';  // 백업 파일 확인용 이름
+
+  // 알림 서버 (push-server 폴더) 주소와 공개 열쇠
+  var PUSH_SERVER = 'https://bible-push.bible-push.workers.dev';
+  var VAPID_PUBLIC_KEY = 'BDMTs3ZoJLc6_8OaMk9DXWlZdOtBpGKpf4OPtrLhg8pPx8n1CxSDdLTDBHU_y1mGzRygahEdECksE-VhFJA3QC8';
+  var NOTIFY_DATA_CACHE = 'brp-notify'; // sw.js의 NOTIFY_CACHE와 같은 이름
   var WD = PLANNER.WEEKDAY_NAMES;
 
   var $ = function (id) { return document.getElementById(id); };
@@ -101,6 +107,7 @@
     });
     if (view === 'today') extraDays = 0;
     if (view === 'calendar') calMonth = null;
+    if (view === 'settings') notifyMsg = null;
     renderCurrent();
     window.scrollTo(0, 0);
   }
@@ -111,6 +118,7 @@
     if (currentView === 'table') renderTable();
     if (currentView === 'settings') renderSettings();
     if (currentView === 'setup') renderSetup();
+    if (currentView !== 'setup') updateNotifyData();
   }
 
   function initTabs() {
@@ -329,6 +337,7 @@
       }
       store(LOG_KEY, log);
       renderToday();
+      updateNotifyData();
     });
   }
 
@@ -911,6 +920,7 @@
       status.className = 'backup-status' + (days >= 30 ? ' warn' : '');
     }
 
+    renderNotify();
     renderArchive(g);
     renderInstallGuide();
   }
@@ -938,6 +948,11 @@
   function shortYmd(str) {
     var d = PLANNER.parseDate(str);
     return d.getFullYear() + '.' + (d.getMonth() + 1) + '.' + d.getDate();
+  }
+
+  function isIOS() {
+    return /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   }
 
   function isStandalone() {
@@ -977,11 +992,9 @@
   function exportBackup() {
     var json = JSON.stringify(backupData(), null, 2);
     var name = 'bible-backup-' + today + '.json';
-    var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
     // 아이폰: 공유 창으로 "파일에 저장" (가장 확실한 방법)
-    if (isIOS && typeof File === 'function' && navigator.canShare) {
+    if (isIOS() && typeof File === 'function' && navigator.canShare) {
       var file = new File([json], name, { type: 'application/json' });
       if (navigator.canShare({ files: [file] })) {
         navigator.share({ files: [file], title: '성경통독표 백업' })
@@ -1048,6 +1061,290 @@
     reader.readAsText(file);
   }
 
+  // ---------- 알림 ----------
+  // 서버는 정한 시간에 "아침/저녁 알림"만 보내고, 알림 문구(오늘 읽을 곳)는
+  // 앱이 앞으로 2주치를 미리 적어두면 서비스 워커(sw.js)가 꺼내 씁니다.
+
+  var notify = load(NOTIFY_KEY, null) || {
+    enabled: false,
+    morning: { on: true, time: '07:00' },
+    evening: { on: true, time: '21:00' },
+    endpoint: null,
+    tz: null
+  };
+  var notifyBusy = false;
+  var notifyMsg = null;     // 방금 한 일의 결과 { text, warn }
+  var notifySaveTimer = null;
+  var KINDS = ['morning', 'evening'];
+
+  function pushSupported() {
+    return window.isSecureContext && 'serviceWorker' in navigator &&
+      'PushManager' in window && 'Notification' in window;
+  }
+
+  function timeZone() {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Seoul'; } catch (e) { return 'Asia/Seoul'; }
+  }
+
+  function initNotify() {
+    KINDS.forEach(function (kind) {
+      $('notify-' + kind + '-time').addEventListener('change', function () {
+        if (this.value) notify[kind].time = this.value;
+        onNotifyChange();
+      });
+      $('notify-' + kind + '-on').addEventListener('change', function () {
+        notify[kind].on = this.checked;
+        onNotifyChange();
+      });
+    });
+    $('btn-notify-on').addEventListener('click', enableNotify);
+    $('btn-notify-test').addEventListener('click', testNotify);
+    $('btn-notify-off').addEventListener('click', disableNotify);
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) updateNotifyData();
+    });
+
+    // 앱을 열 때: 알림 구독이 살아있는지, 주소가 바뀌지 않았는지 확인
+    if (notify.enabled && pushSupported()) {
+      currentSubscription().then(function (sub) {
+        if (!sub) {
+          notify.enabled = false;
+          notify.endpoint = null;
+          store(NOTIFY_KEY, notify);
+          if (currentView === 'settings') renderNotify();
+        } else if (sub.endpoint !== notify.endpoint || notify.tz !== timeZone()) {
+          return saveSubscription(sub);
+        }
+      }).catch(function () {});
+    }
+  }
+
+  function currentSubscription() {
+    return navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); });
+  }
+
+  function postToServer(path, data) {
+    return fetch(PUSH_SERVER + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    }).then(function (res) {
+      if (!res.ok) throw new Error('server');
+      return res.json();
+    });
+  }
+
+  function saveSubscription(sub) {
+    return postToServer('/subscribe', {
+      subscription: sub.toJSON(),
+      tz: timeZone(),
+      morning: notify.morning,
+      evening: notify.evening
+    }).then(function () {
+      notify.endpoint = sub.endpoint;
+      notify.tz = timeZone();
+      store(NOTIFY_KEY, notify);
+    });
+  }
+
+  function base64UrlToBytes(str) {
+    var b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    var bin = atob(b64);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  function setNotifyMsg(text, warn) {
+    notifyMsg = text ? { text: text, warn: !!warn } : null;
+    renderNotify();
+  }
+
+  function notifyErrorText(err) {
+    var m = err && err.message;
+    if (m === 'denied') return '알림이 허용되지 않았어요. 아이폰 설정 → 알림 → 통독표에서 "알림 허용"을 켜주세요.';
+    if (m === 'server') return '알림 서버에 저장하지 못했어요. 잠시 후 다시 해주세요.';
+    if (err && err.name === 'TypeError') return '인터넷에 연결되지 않았어요. 연결을 확인하고 다시 해주세요.';
+    return '알림을 켜지 못했어요. 잠시 후 다시 해주세요.';
+  }
+
+  function enableNotify() {
+    if (notifyBusy || !pushSupported()) return;
+    notifyBusy = true;
+    setNotifyMsg('알림을 켜는 중이에요...');
+    // 허락 묻기는 버튼을 누른 순간 바로 해야 아이폰이 창을 띄워줘요
+    Promise.resolve(Notification.requestPermission()).then(function (perm) {
+      if (perm !== 'granted') throw new Error('denied');
+      return navigator.serviceWorker.ready;
+    }).then(function (reg) {
+      return reg.pushManager.getSubscription().then(function (sub) {
+        return sub || reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: base64UrlToBytes(VAPID_PUBLIC_KEY)
+        });
+      });
+    }).then(saveSubscription).then(function () {
+      notify.enabled = true;
+      store(NOTIFY_KEY, notify);
+      updateNotifyData();
+      notifyBusy = false;
+      setNotifyMsg('✅ 알림을 켰어요. "테스트 알림 보내기"로 잘 오는지 확인해 보세요.');
+    }).catch(function (err) {
+      notifyBusy = false;
+      setNotifyMsg(notifyErrorText(err), true);
+    });
+  }
+
+  function testNotify() {
+    if (notifyBusy) return;
+    notifyBusy = true;
+    setNotifyMsg('테스트 알림을 보내는 중이에요...');
+    updateNotifyData().then(currentSubscription).then(function (sub) {
+      if (!sub) throw new Error('lost');
+      return postToServer('/test', { endpoint: sub.endpoint });
+    }).then(function () {
+      notifyBusy = false;
+      setNotifyMsg('📨 테스트 알림을 보냈어요. 몇 초 안에 도착해요.');
+    }).catch(function (err) {
+      notifyBusy = false;
+      if (err && err.message === 'lost') {
+        notify.enabled = false;
+        store(NOTIFY_KEY, notify);
+        setNotifyMsg('알림 연결이 끊겼어요. "알림 켜기"를 다시 눌러주세요.', true);
+      } else {
+        setNotifyMsg(err && err.message === 'server' ? '테스트 알림을 보내지 못했어요. "알림 끄기" 후 다시 켜보세요.' : notifyErrorText(err), true);
+      }
+    });
+  }
+
+  function disableNotify() {
+    if (notifyBusy) return;
+    notifyBusy = true;
+    setNotifyMsg('알림을 끄는 중이에요...');
+    currentSubscription().then(function (sub) {
+      if (!sub) return;
+      // 서버에서 못 지워도 괜찮아요: 폰에서 구독을 끊으면 서버가 다음에 알아서 정리해요
+      return postToServer('/unsubscribe', { endpoint: sub.endpoint }).catch(function () {})
+        .then(function () { return sub.unsubscribe(); });
+    }).catch(function () {}).then(function () {
+      notify.enabled = false;
+      notify.endpoint = null;
+      store(NOTIFY_KEY, notify);
+      notifyBusy = false;
+      setNotifyMsg('알림을 껐어요.');
+    });
+  }
+
+  // 시간·켜기/끄기를 바꾸면 잠깐 기다렸다가 서버에 저장
+  function onNotifyChange() {
+    store(NOTIFY_KEY, notify);
+    renderNotify();
+    if (!notify.enabled || !pushSupported()) return;
+    clearTimeout(notifySaveTimer);
+    notifySaveTimer = setTimeout(function () {
+      currentSubscription().then(function (sub) {
+        if (!sub) throw new Error('lost');
+        return saveSubscription(sub);
+      }).then(function () {
+        setNotifyMsg('✅ 알림 시간을 저장했어요.');
+      }).catch(function (err) {
+        setNotifyMsg(err && err.message === 'lost' ? '알림 연결이 끊겼어요. "알림 끄기" 후 다시 켜주세요.' : notifyErrorText(err), true);
+      });
+    }, 600);
+  }
+
+  function renderNotify() {
+    KINDS.forEach(function (kind) {
+      var time = $('notify-' + kind + '-time');
+      if (document.activeElement !== time) time.value = notify[kind].time;
+      time.disabled = !notify[kind].on;
+      $('notify-' + kind + '-on').checked = notify[kind].on;
+    });
+
+    var supported = pushSupported();
+    var text = '';
+    var warn = false;
+    if (!supported) {
+      text = isIOS() && !isStandalone() ?
+        '알림은 홈 화면에 추가한 앱에서만 켤 수 있어요. 아래 "아이폰 홈 화면에 추가하기"를 먼저 해주세요.' :
+        '이 화면에서는 알림을 쓸 수 없어요. 아이폰은 iOS 16.4 이상, 홈 화면에 추가한 앱에서 켤 수 있어요.';
+      warn = true;
+    } else if (notifyMsg) {
+      text = notifyMsg.text;
+      warn = notifyMsg.warn;
+    } else if (notify.enabled) {
+      text = '✅ 알림이 켜져 있어요.';
+    } else if (Notification.permission === 'denied') {
+      text = notifyErrorText(new Error('denied'));
+      warn = true;
+    }
+    $('notify-status').textContent = text;
+    $('notify-status').className = 'notify-status' + (warn ? ' warn' : '');
+
+    $('btn-notify-on').hidden = !supported || notify.enabled;
+    $('btn-notify-test').hidden = !supported || !notify.enabled;
+    $('btn-notify-off').hidden = !supported || !notify.enabled;
+    ['btn-notify-on', 'btn-notify-test', 'btn-notify-off'].forEach(function (id) { $(id).disabled = notifyBusy; });
+  }
+
+  // 앞으로 2주치 알림 문구를 폰 안(캐시 저장소)에 적어둡니다.
+  function updateNotifyData() {
+    if (!notify.enabled || !saved || !('caches' in window)) return Promise.resolve();
+    var p = getPlan();
+    if (!p.ok) return Promise.resolve();
+    var g = PROGRESS.compute(p, log, today);
+    var data = { updatedAt: new Date().toISOString(), days: {} };
+    for (var i = 0; i < 14; i++) {
+      var date = PLANNER.addDays(today, i);
+      data.days[date] = notifyTextFor(p, g, date);
+    }
+    return caches.open(NOTIFY_DATA_CACHE).then(function (cache) {
+      return cache.put(new URL('notify-data', location.href).href,
+        new Response(JSON.stringify(data), { headers: { 'Content-Type': 'application/json' } }));
+    }).catch(function () {});
+  }
+
+  function notifyTextFor(p, g, date) {
+    var morning = '성경 묵상할 시간이에요 🍇';
+    var evening = '오늘 하나님 말씀에 귀 기울였나요?';
+    var text = function (mBody, eBody) {
+      return { morning: { title: morning, body: mBody }, evening: { title: evening, body: eBody } };
+    };
+
+    if (g.finished) {
+      return text('통독을 마쳤어요. 오늘도 좋아하는 말씀 한 구절을 묵상해 볼까요?', '오늘도 말씀과 함께한 하루였길 바라요.');
+    }
+    if (date < p.startDate) {
+      var dday = PLANNER.daysBetween(date, p.startDate);
+      return text('D-' + dday + ' · ' + shortDate(p.startDate) + '부터 통독을 시작해요.', '통독 시작까지 D-' + dday + '이에요.');
+    }
+
+    // 지금까지 읽은 곳(책갈피) 다음부터, 그날까지 계획상 읽어야 하는 곳까지
+    var segmentStart = p.segmentStart || p.startDate;
+    var goal = -1;
+    var day = null;
+    p.days.forEach(function (d) {
+      if (d.date === date) day = d;
+      if (!d.rest && d.date <= date && d.date >= segmentStart) goal = Math.max(goal, d.to);
+    });
+    var rest = !!(day && day.rest);
+    var reached = g.bookmark;
+
+    if (goal > reached) {
+      var range = PLANNER.rangeLabel(p.chapters, reached + 1, goal, true);
+      var mins = prettyMinutes(Math.max(1, (g.cum[goal + 1] - g.cum[reached + 1]) / p.speed));
+      return text(
+        rest ? '오늘은 쉬는 날이에요. 밀린 ' + range + '을 따라잡아 볼까요? (약 ' + mins + ')' :
+          '오늘은 ' + range + '을 묵상하는 날이에요. (약 ' + mins + ')',
+        '어디까지 읽었는지 체크해 주세요. 오늘 읽을 곳: ' + range
+      );
+    }
+    return rest ?
+      text('오늘은 쉬는 날이에요. 편히 쉬어요 ☕️', '오늘은 쉬는 날이에요. 평안한 밤 보내세요.') :
+      text('오늘 분량은 이미 읽었어요. 말씀을 한 번 더 묵상해 볼까요?', '네, 오늘 분량을 다 읽었어요. 수고했어요 🍇');
+  }
+
   // ---------- 시작 ----------
 
   initSetup();
@@ -1056,10 +1353,12 @@
   initSheet();
   initSettings();
   initTabs();
-  show(saved ? 'today' : 'setup');
 
-  // 인터넷 주소(https)로 열었을 때만 서비스 워커 등록 (내 컴퓨터 파일로 열면 건너뜀)
-  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  // 인터넷 주소(https 또는 내 컴퓨터 테스트 서버)로 열었을 때만 서비스 워커 등록
+  if ('serviceWorker' in navigator && window.isSecureContext && /^https?:$/.test(location.protocol)) {
     navigator.serviceWorker.register('sw.js').catch(function () {});
   }
+
+  initNotify();
+  show(saved ? 'today' : 'setup');
 })();
