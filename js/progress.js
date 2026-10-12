@@ -29,7 +29,8 @@ var PROGRESS = (function () {
       });
 
     var statusByDate = {};
-    var pos = -1; // 지금까지 읽은 마지막 장 (-1 = 아직 없음)
+    var already = (plan.firstLocal || 0) - 1; // 시작 장 앞까지는 이미 읽은 것으로 칩니다.
+    var pos = already; // 지금까지 읽은 마지막 장 (-1 = 아직 없음)
     var p = 0;
 
     plan.days.forEach(function (day) {
@@ -62,7 +63,7 @@ var PROGRESS = (function () {
     var bookmark = pos;
 
     // 오늘 이전까지의 책갈피 (오늘 체크할 동그라미는 여기 다음부터)
-    var beforeToday = -1;
+    var beforeToday = already;
     var todayEntry = null;
     entries.forEach(function (e) {
       if (e.date < today) beforeToday = Math.max(beforeToday, e.pos);
@@ -108,7 +109,7 @@ var PROGRESS = (function () {
     var chapters = plan.chapters;
     var n = chapters.length;
     var offset = chapters[0].gid;
-    var before = -1;
+    var before = (plan.firstLocal || 0) - 1;
     var entry = null;
     Object.keys(log).forEach(function (d) {
       var local = log[d] - offset;

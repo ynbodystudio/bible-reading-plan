@@ -148,9 +148,14 @@
         var name = seg.dataset.name;
         if (name === 'mode' && btn.dataset.value !== settings.mode) carryOverValues(btn.dataset.value);
         settings[name] = btn.dataset.value;
+        if (name === 'scope') fixFirstGid();
         renderSetup();
       });
     });
+
+    // 어디서부터 읽을까요? (책을 바꾸면 그 책 1장부터)
+    $('firstBook').addEventListener('change', function () { setFirstGid(Number(this.value)); });
+    $('firstChapter').addEventListener('change', function () { setFirstGid(Number(this.value)); });
 
     var wd = $('weekdays');
     WD.forEach(function (name, i) {
@@ -205,6 +210,39 @@
     $('btn-replan').addEventListener('click', openReplanSheet);
   }
 
+  // 맨 처음 장을 고르면 "처음부터"이므로 따로 저장하지 않습니다.
+  function setFirstGid(gid) {
+    if (gid === PLANNER.getChapters(settings.scope)[0].gid) delete settings.firstGid;
+    else settings.firstGid = gid;
+    renderSetup();
+  }
+
+  // 범위(전체/구약/신약)를 바꿨는데 시작 장이 그 범위 밖이면 처음부터로 되돌립니다.
+  function fixFirstGid() {
+    if (settings.firstGid === undefined) return;
+    var inScope = PLANNER.getChapters(settings.scope).some(function (c) { return c.gid === settings.firstGid; });
+    if (!inScope) delete settings.firstGid;
+  }
+
+  function renderFirstPicker() {
+    var chapters = PLANNER.getChapters(settings.scope);
+    var firstGid = settings.firstGid === undefined ? chapters[0].gid : settings.firstGid;
+    var bookHtml = '', chapterHtml = '', currentBook = null;
+    chapters.forEach(function (c) {
+      if (c.gid === firstGid) currentBook = c.name;
+    });
+    chapters.forEach(function (c) {
+      if (c.ch === 1) {
+        bookHtml += '<option value="' + c.gid + '"' + (c.name === currentBook ? ' selected' : '') + '>' + escapeHtml(c.name) + '</option>';
+      }
+      if (c.name === currentBook) {
+        chapterHtml += '<option value="' + c.gid + '"' + (c.gid === firstGid ? ' selected' : '') + '>' + c.ch + '장</option>';
+      }
+    });
+    $('firstBook').innerHTML = bookHtml;
+    $('firstChapter').innerHTML = chapterHtml;
+  }
+
   // 기준(기간/마감일/하루 시간)을 바꿀 때, 지금 계산된 값을 새 칸에 미리 채워줍니다.
   function carryOverValues(newMode) {
     if (!lastResult || !lastResult.ok) return;
@@ -239,6 +277,8 @@
     var chapters = PLANNER.getChapters(settings.scope);
     $('scope-hint').textContent = PLANNER.SCOPE_NAMES[settings.scope] + ' ' +
       chapters.length.toLocaleString() + '장';
+
+    renderFirstPicker();
 
     $('btn-cancel').hidden = !saved;
     $('setup-import').hidden = !!saved;

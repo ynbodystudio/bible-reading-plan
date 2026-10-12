@@ -165,15 +165,22 @@ var PLANNER = (function () {
     }
   }
 
-  // settings: { scope, startDate, mode, periodValue, periodUnit, deadline, dailyMinutes, speed, weekdays, startGid? }
+  // gid 장이 범위(chapters) 안에서 몇 번째인지 (없으면 그 다음 장 자리)
+  function localOf(chapters, gid) {
+    var i = 0;
+    if (gid === undefined) return 0;
+    while (i < chapters.length && chapters[i].gid < gid) i++;
+    return i;
+  }
+
+  // settings: { scope, startDate, mode, periodValue, periodUnit, deadline, dailyMinutes, speed, weekdays, firstGid?, startGid? }
+  // firstGid가 있으면 그 장부터 읽기 시작합니다. 앞의 장들은 이미 읽은 것으로 칩니다. ("어디서부터 읽을까요?")
   // startGid가 있으면 그 장부터 남은 분량만 나눕니다. ("계획 다시 짜기"에서 사용)
   // 결과의 from/to는 항상 범위 전체(chapters) 기준 번호입니다.
   function computePlan(s) {
     var chapters = getChapters(s.scope);
-    var startLocal = 0;
-    if (s.startGid !== undefined) {
-      while (startLocal < chapters.length && chapters[startLocal].gid < s.startGid) startLocal++;
-    }
+    var firstLocal = localOf(chapters, s.firstGid);
+    var startLocal = Math.max(firstLocal, localOf(chapters, s.startGid));
     var work = chapters.slice(startLocal); // 이번 계획으로 읽을 장들
     var totalVerses = work.reduce(function (sum, c) { return sum + c.verses; }, 0);
     var speed = SPEEDS[s.speed];
@@ -250,6 +257,7 @@ var PLANNER = (function () {
     result.chaptersPerDay = work.length / readingDays;
     result.minutesPerDay = totalVerses / readingDays / speed;
     result.days = days;
+    result.firstLocal = firstLocal;
     result.segmentStart = s.startDate;
     if (result.minutesPerDay > MAX_MINUTES_WARNING * 3) {
       result.warning = '하루 3시간이 넘어요. 현실적으로 어려운 계획이에요.';
