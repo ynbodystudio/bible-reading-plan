@@ -1,7 +1,7 @@
 // 서비스 워커: 앱 파일을 폰에 보관해서, 인터넷이 없어도 앱이 열리게 합니다.
 // 인터넷이 되면 항상 새 파일을 먼저 받아오고(업데이트 바로 반영), 안 되면 보관본을 씁니다.
 
-var CACHE = 'brp-v4';
+var CACHE = 'brp-v5';
 var NOTIFY_CACHE = 'brp-notify'; // 앱이 적어둔 "날짜별 알림 문구" (지우지 않음)
 var FILES = [
   './',
@@ -82,7 +82,8 @@ self.addEventListener('fetch', function (event) {
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
 
   event.respondWith(
-    fetch(req).then(function (res) {
+    // no-cache: 브라우저가 기억해 둔 옛 파일 대신 항상 최신인지 확인합니다. (화면과 코드가 섞이지 않게)
+    fetch(req, { cache: 'no-cache' }).then(function (res) {
       if (res.ok) {
         var copy = res.clone();
         caches.open(CACHE).then(function (cache) { cache.put(req, copy); });
